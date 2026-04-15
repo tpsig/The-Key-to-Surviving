@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using Unity.Netcode;
 
 public class HealthUI : MonoBehaviour
 {
@@ -9,30 +10,56 @@ public class HealthUI : MonoBehaviour
 
     void Start()
     {
-        PlayerHealth[] players = FindObjectsOfType<PlayerHealth>();
-
-        foreach (var p in players)
-        {
-            if (p.IsOwner)
-            {
-                playerHealth = p;
-                break;
-            }
-        }
-
-        if (playerHealth == null)
-        {
-            Debug.LogError("No local PlayerHealth found!");
-            return;
-        }
-
-        playerHealth.OnHealthChanged += UpdateHealthText;
-
-        UpdateHealthText(playerHealth.health.Value);
+        NetworkManager.Singleton.OnClientConnectedCallback += OnClientReady;
+        StartCoroutine(FindLocalPlayer());
     }
 
-    void UpdateHealthText(int health)
+    private void OnClientReady(ulong clientId)
     {
-        healthText.text = "Health: " + health;
+        StartCoroutine(FindLocalPlayer());
+    }
+
+    private System.Collections.IEnumerator FindLocalPlayer()
+    {
+        while (playerHealth == null)
+        {
+            foreach (var p in FindObjectsOfType<PlayerHealth>())
+            {
+                if (p.NetworkObject.IsOwner)
+                {
+                    playerHealth = p;
+
+                    Debug.Log("[UI] Bound to player: " + p.name);
+
+                    playerHealth.health.OnValueChanged += OnHealthChanged;
+
+                    UpdateHealthText(playerHealth.health.Value);
+                    yield break;
+                }
+            }
+
+            yield return null;
+        }
+    }
+
+    private void OnHealthChanged(int oldValue, int newValue)
+    {
+        Debug.Log($"[UI] Health changed: {oldValue} -> {newValue}");
+        UpdateHealthText(newValue);
+    }
+
+    private void UpdateHealthText(int value)
+    {
+        if (healthText != null)
+            healthText.text = "Health: " + value;
+    }
+
+    private void OnDestroy()
+    {
+        if (playerHealth != null)
+            playerHealth.health.OnValueChanged -= OnHealthChanged;
+
+        if (NetworkManager.Singleton != null)
+            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientReady;
     }
 }

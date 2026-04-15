@@ -1,6 +1,7 @@
 using UnityEngine;
+using Unity.Netcode;
 
-public class Enemy : MonoBehaviour
+public class Enemy : NetworkBehaviour
 {
     public enum MovementType
     {
@@ -12,58 +13,55 @@ public class Enemy : MonoBehaviour
     public MovementType movementType = MovementType.Horizontal;
 
     [Header("Movement Settings")]
-    public float moveSpeed = 3f;
-    public float patrolDistance = 1f;
+    public float moveSpeed = 2.5f;
+    public float patrolDistance = 2f;
 
     private Vector3 startPosition;
-    private int direction = 1;
+    private Vector3 targetPosition;
+    private bool goingPositive = true;
 
-    void Start()
+    public override void OnNetworkSpawn()
     {
         startPosition = transform.position;
+
+        if (!IsServer) return;
+
+        SetNextTarget();
     }
 
     void Update()
     {
-        if (movementType == MovementType.Horizontal)
+        if (!IsServer) return;
+
+        PatrolMove();
+    }
+
+    void PatrolMove()
+    {
+        // Move toward target (smooth + stable)
+        transform.position = Vector3.MoveTowards(
+            transform.position,
+            targetPosition,
+            moveSpeed * Time.deltaTime
+        );
+
+        // When we reach target, flip direction
+        if (Vector3.Distance(transform.position, targetPosition) < 0.01f)
         {
-            MoveHorizontal();
-        }
-        else
-        {
-            MoveVertical();
+            goingPositive = !goingPositive;
+            SetNextTarget();
         }
     }
 
-    void MoveHorizontal()
+    void SetNextTarget()
     {
-        transform.position += new Vector3(
-            direction * moveSpeed * Time.deltaTime,
-            0,
-            0
-        );
+        Vector3 dir =
+            (movementType == MovementType.Horizontal)
+                ? Vector3.right
+                : Vector3.up;
 
-        float distance = Vector3.Distance(startPosition, transform.position);
+        float sign = goingPositive ? 1f : -1f;
 
-        if (distance > patrolDistance)
-        {
-            direction *= -1;
-        }
-    }
-
-    void MoveVertical()
-    {
-        transform.position += new Vector3(
-            0,
-            direction * moveSpeed * Time.deltaTime,
-            0
-        );
-
-        float distance = Vector3.Distance(startPosition, transform.position);
-
-        if (distance > patrolDistance)
-        {
-            direction *= -1;
-        }
+        targetPosition = startPosition + dir * patrolDistance * sign;
     }
 }

@@ -9,7 +9,6 @@ public class PlayerController : NetworkBehaviour
 
     private Rigidbody2D rb;
     private PlayerIdentity identity;
-    private PlayerHealth health;
 
     private Vector2 input;
 
@@ -17,19 +16,18 @@ public class PlayerController : NetworkBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         identity = GetComponent<PlayerIdentity>();
-        health = GetComponent<PlayerHealth>();
     }
 
     void Update()
     {
-        if (!IsServer) return;
+        if (!IsOwner) return;
 
         input = GetInput();
     }
 
     void FixedUpdate()
     {
-        if (!IsServer) return;
+        if (!IsOwner) return;
 
         rb.linearVelocity = input * speed;
     }
@@ -58,21 +56,100 @@ public class PlayerController : NetworkBehaviour
         return new Vector2(x, y);
     }
 
+    // ======================================================
+    // ENEMY + KEY UNIFIED DETECTION (CLIENT SIDE TRIGGER)
+    // ======================================================
     private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (!IsOwner) return;
+
+        // -------------------------
+        // KEY INTERACTION
+        // -------------------------
+        Key key = other.GetComponent<Key>();
+        if (key != null)
+        {
+            InteractServerRpc(key.NetworkObject);
+            return;
+        }
+
+        // -------------------------
+        // ENEMY INTERACTION
+        // -------------------------
+        if (other.CompareTag("Enemy"))
+        {
+            EnemyHitServerRpc();
+        }
+    }
+
+    // ======================================================
+    // SERVER HANDLES EVERYTHING (AUTHORITATIVE)
+    // ======================================================
+
+    [ServerRpc]
+    private void InteractServerRpc(NetworkObjectReference keyRef)
+    {
+        if (!keyRef.TryGet(out NetworkObject netObj))
+            return;
+
+        Key key = netObj.GetComponent<Key>();
+        if (key == null)
+            return;
+
+        GameManager.Instance.CollectKey();
+        netObj.Despawn(true);
+    }
+
+    [ServerRpc]
+    private void EnemyHitServerRpc()
+    {
+        PlayerHealth health = GetComponent<PlayerHealth>();
+
+        if (health == null)
+        {
+            Debug.LogError("Missing PlayerHealth");
+            return;
+        }
+
+        Debug.Log($"[SERVER] Damaging Player Owner={OwnerClientId}");
+
+        health.TakeDamage(25);
+
+        // simple knockback (safe version)
+        Vector2 knockDir = Vector2.zero;
+
+        GameObject enemy = GameObject.FindWithTag("Enemy");
+        if (enemy != null)
+        {
+            knockDir = (transform.position - enemy.transform.position).normalized;
+        }
+
+        Knockback(knockDir, 5f);
+    }
+
+    // ======================================================
+    // MOVEMENT SUPPORT (UNCHANGED)
+    // ======================================================
+
+    public void Knockback(Vector2 direction, float force)
     {
         if (!IsServer) return;
 
-        if (other.CompareTag("Enemy"))
-        {
-            if (health != null)
-            {
-                health.TakeDamage(25);
-            }
-        }
+        rb.linearVelocity = Vector2.zero;
+        rb.AddForce(direction * force, ForceMode2D.Impulse);
+    }
 
-        if (other.CompareTag("Key"))
+    public override void OnNetworkSpawn()
+    {
+        if (!IsServer) return;
+
+        GameObject spawn = (OwnerClientId == 0)
+            ? GameObject.FindWithTag("HostSpawn")
+            : GameObject.FindWithTag("ClientSpawn");
+
+        if (spawn != null)
         {
-            GameManager.Instance.CollectKey();
+            transform.position = spawn.transform.position;
         }
     }
 }

@@ -8,6 +8,11 @@ TagManager:
   - Player2
   - Key
   - Enemy
+  - ClientSpawn
+  - HostSpawn
+  - EnemySpawn1
+  - EnemySpawn2
+  - EnemySpawn3
   layers:
   - Default
   - TransparentFX

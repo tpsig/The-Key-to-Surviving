@@ -1,12 +1,16 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Unity.Netcode;
 
-public class GameManager : MonoBehaviour
+public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    private int deadPlayers = 0;
-    private bool gameEnded = false;
+    public NetworkVariable<bool> gameEndedNet = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    public NetworkVariable<int> deadPlayersNet = new NetworkVariable<int>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     [Header("Settings")]
     public string gameOverSceneName = "GameOverScene";
@@ -23,9 +27,10 @@ public class GameManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    // ✅ NOW A NORMAL SERVER METHOD (NOT ServerRpc)
     public void CollectKey()
     {
-        if (gameEnded) return;
+        if (!IsServer || gameEndedNet.Value) return;
 
         Debug.Log("Key collected → WIN");
         WinGame();
@@ -33,26 +38,66 @@ public class GameManager : MonoBehaviour
 
     public void PlayerDied()
     {
-        if (gameEnded) return;
+        if (!IsServer || gameEndedNet.Value) return;
 
-        deadPlayers++;
-
-        Debug.Log("Player died. Total dead: " + deadPlayers);
+        deadPlayersNet.Value++;
+        Debug.Log("Player died. Total dead: " + deadPlayersNet.Value);
 
         LoseGame();
     }
 
     private void WinGame()
     {
-        gameEnded = true;
+        gameEndedNet.Value = true;
+
         Debug.Log("YOU WIN!");
-        SceneManager.LoadScene(gameOverSceneName);
+
+        DespawnAllPlayers();
+
+        NetworkManager.Singleton.SceneManager.LoadScene(
+            gameOverSceneName,
+            LoadSceneMode.Single
+        );
+
+        WinGameClientRpc();
     }
 
     private void LoseGame()
     {
-        gameEnded = true;
-        Debug.Log("ALL PLAYERS DEAD → GAME OVER");
-        SceneManager.LoadScene(gameOverSceneName);
+        gameEndedNet.Value = true;
+
+        Debug.Log("GAME OVER");
+
+        DespawnAllPlayers();
+
+        NetworkManager.Singleton.SceneManager.LoadScene(
+            gameOverSceneName,
+            LoadSceneMode.Single
+        );
+
+        LoseGameClientRpc();
+    }
+
+    [ClientRpc]
+    private void WinGameClientRpc()
+    {
+        Debug.Log("CLIENT: YOU WIN!");
+    }
+
+    [ClientRpc]
+    private void LoseGameClientRpc()
+    {
+        Debug.Log("CLIENT: GAME OVER");
+    }
+
+    private void DespawnAllPlayers()
+    {
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            if (client.PlayerObject != null)
+            {
+                client.PlayerObject.Despawn(true);
+            }
+        }
     }
 }
