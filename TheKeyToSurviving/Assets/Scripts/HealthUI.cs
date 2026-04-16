@@ -1,6 +1,5 @@
 using UnityEngine;
 using TMPro;
-using Unity.Netcode;
 
 public class HealthUI : MonoBehaviour
 {
@@ -8,58 +7,33 @@ public class HealthUI : MonoBehaviour
 
     private PlayerHealth playerHealth;
 
-    void Start()
+    public void Bind(PlayerHealth target)
     {
-        NetworkManager.Singleton.OnClientConnectedCallback += OnClientReady;
-        StartCoroutine(FindLocalPlayer());
-    }
+        if (playerHealth != null)
+            playerHealth.health.OnValueChanged -= OnHealthChanged;
 
-    private void OnClientReady(ulong clientId)
-    {
-        StartCoroutine(FindLocalPlayer());
-    }
+        playerHealth = target;
 
-    private System.Collections.IEnumerator FindLocalPlayer()
-    {
-        while (playerHealth == null)
-        {
-            foreach (var p in FindObjectsOfType<PlayerHealth>())
-            {
-                if (p.NetworkObject.IsOwner)
-                {
-                    playerHealth = p;
+        if (playerHealth == null) return;
 
-                    Debug.Log("[UI] Bound to player: " + p.name);
+        playerHealth.health.OnValueChanged += OnHealthChanged;
 
-                    playerHealth.health.OnValueChanged += OnHealthChanged;
-
-                    UpdateHealthText(playerHealth.health.Value);
-                    yield break;
-                }
-            }
-
-            yield return null;
-        }
+        UpdateHealth(playerHealth.health.Value);
     }
 
     private void OnHealthChanged(int oldValue, int newValue)
     {
-        Debug.Log($"[UI] Health changed: {oldValue} -> {newValue}");
-        UpdateHealthText(newValue);
+        UpdateHealth(newValue);
     }
 
-    private void UpdateHealthText(int value)
+    private void UpdateHealth(int value)
     {
-        if (healthText != null)
-            healthText.text = "Health: " + value;
+        healthText.text = $"Health: {value}";
     }
 
     private void OnDestroy()
     {
         if (playerHealth != null)
             playerHealth.health.OnValueChanged -= OnHealthChanged;
-
-        if (NetworkManager.Singleton != null)
-            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientReady;
     }
 }

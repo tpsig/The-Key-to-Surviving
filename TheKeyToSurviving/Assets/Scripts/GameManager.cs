@@ -14,7 +14,6 @@ public class GameManager : NetworkBehaviour
 
     [Header("Settings")]
     public string gameOverSceneName = "GameOverScene";
-
     private void Awake()
     {
         if (Instance != null && Instance != this)
