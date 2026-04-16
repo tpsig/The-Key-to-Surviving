@@ -12,9 +12,16 @@ public class Enemy : NetworkBehaviour
     [Header("Movement Type")]
     public MovementType movementType = MovementType.Horizontal;
 
-    [Header("Movement Settings")]
-    public float moveSpeed = 2.5f;
-    public float patrolDistance = 2f;
+    [Header("Base Movement Settings")]
+    public float baseMoveSpeed = 5f;
+    public float basePatrolDistance = 2f;
+
+    [Header("Random Variation")]
+    public float speedRandomRange = 1.5f;
+    public float distanceRandomRange = 1f;
+
+    private float moveSpeed;
+    private float patrolDistance;
 
     private Vector3 startPosition;
     private Vector3 targetPosition;
@@ -24,9 +31,11 @@ public class Enemy : NetworkBehaviour
     {
         startPosition = transform.position;
 
-        if (!IsServer) return;
-
-        SetNextTarget();
+        if (IsServer)
+        {
+            RandomizeStats();
+            SetNextTarget();
+        }
     }
 
     void Update()
@@ -36,16 +45,24 @@ public class Enemy : NetworkBehaviour
         PatrolMove();
     }
 
+    void RandomizeStats()
+    {
+        moveSpeed = baseMoveSpeed + Random.Range(-speedRandomRange, speedRandomRange);
+        patrolDistance = basePatrolDistance + Random.Range(-distanceRandomRange, distanceRandomRange);
+
+        // safety clamps (prevents weird values)
+        moveSpeed = Mathf.Clamp(moveSpeed, 1f, 20f);
+        patrolDistance = Mathf.Clamp(patrolDistance, 0.5f, 10f);
+    }
+
     void PatrolMove()
     {
-        // Move toward target (smooth + stable)
         transform.position = Vector3.MoveTowards(
             transform.position,
             targetPosition,
             moveSpeed * Time.deltaTime
         );
 
-        // When we reach target, flip direction
         if (Vector3.Distance(transform.position, targetPosition) < 0.01f)
         {
             goingPositive = !goingPositive;

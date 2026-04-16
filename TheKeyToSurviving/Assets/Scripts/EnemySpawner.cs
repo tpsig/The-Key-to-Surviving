@@ -1,20 +1,26 @@
 using UnityEngine;
 using Unity.Netcode;
+using System.Collections;
 
 public class EnemySpawner : NetworkBehaviour
 {
     public GameObject enemyPrefab;
 
-    private bool hasSpawned = false;
+    private bool hasSpawned;
 
     public override void OnNetworkSpawn()
     {
-        Debug.Log("SPAWNING ENEMIES CALLED");
-
         if (!IsServer) return;
 
-        // ✅ PREVENT DOUBLE SPAWN
-        if (hasSpawned) return;
+        StartCoroutine(SpawnWhenReady());
+    }
+
+    private IEnumerator SpawnWhenReady()
+    {
+        // WAIT FOR SCENE TO FULLY STABILIZE
+        yield return new WaitForSeconds(1f);
+
+        if (hasSpawned) yield break;
         hasSpawned = true;
 
         SpawnEnemies();
@@ -22,31 +28,45 @@ public class EnemySpawner : NetworkBehaviour
 
     private void SpawnEnemies()
     {
-        SpawnEnemyWithTag("EnemySpawn1", Enemy.MovementType.Horizontal);
-        SpawnEnemyWithTag("EnemySpawn2", Enemy.MovementType.Vertical);
-        SpawnEnemyWithTag("EnemySpawn3", Enemy.MovementType.Horizontal);
+        SpawnEnemy("EnemySpawn1", Enemy.MovementType.Horizontal);
+        SpawnEnemy("EnemySpawn2", Enemy.MovementType.Vertical);
+        SpawnEnemy("EnemySpawn3", Enemy.MovementType.Horizontal);
     }
 
-    private void SpawnEnemyWithTag(string tag, Enemy.MovementType movementType)
+    private void SpawnEnemy(string tag, Enemy.MovementType type)
     {
-        GameObject spawnPoint = GameObject.FindGameObjectWithTag(tag);
+        GameObject spawnPoint = GameObject.FindWithTag(tag);
 
         if (spawnPoint == null)
         {
-            Debug.LogWarning($"No spawn point found with tag: {tag}");
+            Debug.LogWarning($"Missing spawn point: {tag}");
             return;
         }
 
-        GameObject enemyObj = Instantiate(enemyPrefab, spawnPoint.transform.position, Quaternion.identity);
-
-        NetworkObject netObj = enemyObj.GetComponent<NetworkObject>();
-        Enemy enemyScript = enemyObj.GetComponent<Enemy>();
-
-        if (enemyScript != null)
+        if (enemyPrefab == null)
         {
-            enemyScript.movementType = movementType;
+            Debug.LogError("Enemy Prefab is NOT assigned!");
+            return;
         }
 
-        netObj.Spawn(true); // IMPORTANT: ownership = server
+        GameObject enemy = Instantiate(enemyPrefab, spawnPoint.transform.position, Quaternion.identity);
+
+        NetworkObject netObj = enemy.GetComponent<NetworkObject>();
+
+        if (netObj == null)
+        {
+            Debug.LogError("Enemy prefab missing NetworkObject!");
+            return;
+        }
+
+        Enemy enemyScript = enemy.GetComponent<Enemy>();
+        if (enemyScript != null)
+        {
+            enemyScript.movementType = type;
+        }
+
+        netObj.Spawn(true);
+
+        Debug.Log("Spawned enemy at " + tag);
     }
 }

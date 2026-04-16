@@ -51,6 +51,6 @@ public class PlayerHealth : NetworkBehaviour
     private void Die()
     {
         Debug.Log($"[HEALTH] Player {OwnerClientId} died");
-        GameManager.Instance.PlayerDied();
+        GameManager.Instance.PlayerDiedServer(OwnerClientId);
     }
 }
