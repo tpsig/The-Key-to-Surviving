@@ -41,7 +41,7 @@ Open using the correct Unity version (recommended: Unity 2022 or newer with Netc
 *This project uses a Host + Client model.*
 
 ### Running in Unity Editor
-1. Open the scene: MainMenuScene
+1. Open the scene: **MainMenuScene**
 2. Press Play
 3. Select NetworkManager
 4. Click Host on one instance
