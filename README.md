@@ -11,12 +11,12 @@ Each room contains randomized enemy positions and behaviors, ensuring no two run
 - Progress to the next room
 - Survive both levels to win
 
-*Players lose health when hit by enemies (4 hits = game over currently).*
+*Players lose health when hit by enemies (4 hits = game over).*
 
 ## Controls
 ### Input	Action
 - W / A / S / D	Move Player
-- Esc (Planned)	Pause Menu
+- Esc	Pause Menu
 
 ## Setup Instructions (Unity)
 1. Clone the Repository
@@ -41,7 +41,7 @@ Open using the correct Unity version (recommended: Unity 2022 or newer with Netc
 *This project uses a Host + Client model.*
 
 ### Running in Unity Editor
-1. Open the scene: **MainMenuScene**
+1. Open the scene: **BootstrapScene**
 2. Press Play
 3. Select NetworkManager
 4. Click Host on one instance
@@ -58,7 +58,7 @@ Open using the correct Unity version (recommended: Unity 2022 or newer with Netc
 - Run Unity Editor (Host)
 
 ## Connection Flow
-- One player creates a lobby (Host)
+- One player starts the lobby (Host)
 - Second player joins via Client button
 - Both players spawn in same room instance
 - Shared game state is synchronized via Netcode
@@ -104,18 +104,17 @@ Open using the correct Unity version (recommended: Unity 2022 or newer with Netc
 - Singleton Pattern
 - GameManager
 - AudioManager
+- DatabaseManager
+- Save/Load State
 - Event-Driven Architecture
 - Player damage events
 - Network spawn events (OnNetworkSpawn, OnDestroy)
-- Planned Patterns
-- Object Pooling (enemies)
-- Observer Pattern (UI updates)
-- Factory Pattern (randomized enemy spawning)
+- Factory Pattern (Enemies)
 
 ## Scene Structure
 1. Start Scene
-   - Multiplayer lobby creation
-   - Start game / audio control
+   - Automatic Multiplayer lobby creation
+   - Start game / View high scores
 2. Scene 1: Castle Prison
    - Easier introductory level
 3. Scene 2: Castle Dining Hall
@@ -123,32 +122,15 @@ Open using the correct Unity version (recommended: Unity 2022 or newer with Netc
 4. Scene 3: Game Over
 5. Restart or exit options
 
-## Data Persistence (Planned)
-
-*Future feature using SQL or local persistence:*
-
-- Win/Loss tracking
-- Player performance stats
-- Optional partial credit system (co-op survival scoring)
+## Data Persistence
+- Time completion tracking
 - Replayability incentive system
 
 ## Known Issues
-1. Networking Bugs
-2. Client-side synchronization issues
-3. Player state inconsistencies between Host and Client
-4. GameOver scene triggering inconsistently
+1. Load and Save State Glitch after multiple runs and exiting through Save and Quit in Pause Menu
 
 ## Current workaround:
-
-- Some win/loss checks temporarily disabled to stabilize multiplayer
-
-## Future Improvements
-1. Fix full client synchronization
-2. Add enemy object pooling
-3. Improve pause menu system
-4. Add sound effects (damage, key pickup, enemy movement)
-5. Improve procedural room variation
-6. Add reconnect / session recovery system
+- Currently disablement of loading a saved state into the DiningRoomScene
 
 ## Summary
 
