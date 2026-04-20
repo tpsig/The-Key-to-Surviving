@@ -11,14 +11,41 @@ public class GameManager : NetworkBehaviour
     public string prisonScene = "PrisonScene";
     public string diningRoomScene = "DiningRoomScene";
     public string gameOverSceneName = "GameOverScene";
+    public string mainMenuScene = "MainMenuScene";
 
     [Header("Player")]
     [SerializeField] private GameObject playerPrefab;
+
+    [Header("Factory")]
+    [SerializeField] private EnemyFactory enemyFactory;
+
+    public float CurrentTime { get; private set; }
+    private float gameStartTime;
+    private bool timerRunning;
 
     public NetworkVariable<bool> gameEndedNet = new NetworkVariable<bool>(
         false,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
+    );
+
+    // =========================
+    // NEW SYNCED GAME OVER DATA
+    // =========================
+    public NetworkVariable<float> finalTimeNet = new NetworkVariable<float>(
+        0f,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public NetworkVariable<bool> playerWonNet = new NetworkVariable<bool>(
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public NetworkVariable<bool> isPausedNet = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server
     );
 
     private bool sceneLoading;
@@ -42,10 +69,25 @@ public class GameManager : NetworkBehaviour
         NetworkManager.Singleton.SceneManager.OnLoadEventCompleted += OnSceneLoaded;
 
         gameEndedNet.Value = false;
+        StartTimer();
+    }
+
+    private void StartTimer()
+    {
+        gameStartTime = Time.time;
+        timerRunning = true;
+    }
+
+    private void StopTimer()
+    {
+        if (!timerRunning) return;
+
+        CurrentTime = Time.time - gameStartTime;
+        timerRunning = false;
     }
 
     // =====================================================
-    // 🎮 MENU
+    // MENU
     // =====================================================
 
     public void CreateParty()
@@ -54,16 +96,20 @@ public class GameManager : NetworkBehaviour
             return;
 
         NetworkManager.Singleton.StartHost();
-        Debug.Log("Host created");
     }
 
-    public void JoinParty()
+    public void GoToHighScoreScene()
     {
-        if (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsHost)
-            return;
+        Debug.Log("[GameManager] Loading HighScoreScene");
 
-        NetworkManager.Singleton.StartClient();
-        Debug.Log("Client joining");
+        // Optional safety: stop timer so it doesn't keep running in background
+        StopTimer();
+
+        // IMPORTANT:
+        // Do NOT touch NetworkManager here (no shutdown, no RPCs)
+        // This is a local UI-only transition
+
+        SceneManager.LoadScene("HighScoreScene");
     }
 
     public void StartGame()
@@ -71,10 +117,80 @@ public class GameManager : NetworkBehaviour
         if (!IsServer || sceneLoading) return;
 
         LoadScene(prisonScene);
+        StartTimer();
     }
 
-        // =====================================================
-    // 🌍 SCENE SYSTEM
+    public void OnHighScoresClicked()
+    {
+        SceneManager.LoadScene("HighScoreScene");
+    }
+
+    // =====================================================
+    // RETURN TO MENU
+    // =====================================================
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestReturnToMenuServerRpc()
+    {
+        StopTimer();
+        DespawnAllPlayers();
+        ReturnToMenuClientRpc();
+    }
+
+    [ClientRpc]
+    private void ReturnToMenuClientRpc()
+    {
+        SceneManager.LoadScene(mainMenuScene);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestReturnToMenuAndShutdownServerRpc()
+    {
+        StopTimer();
+        DespawnAllPlayers();
+
+        // Move everyone FIRST
+        NetworkManager.Singleton.SceneManager.LoadScene(
+            mainMenuScene,
+            LoadSceneMode.Single
+        );
+
+        // Then shutdown after load completes
+        NetworkManager.Singleton.SceneManager.OnLoadEventCompleted += ShutdownAfterMenuLoad;
+    }
+
+    private void ShutdownAfterMenuLoad(
+        string sceneName,
+        LoadSceneMode mode,
+        List<ulong> completed,
+        List<ulong> timedOut)
+    {
+        if (sceneName != mainMenuScene) return;
+
+        NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= ShutdownAfterMenuLoad;
+
+        Debug.Log("[GameManager] Shutting down network AFTER menu load");
+
+        NetworkManager.Singleton.Shutdown();
+    }
+
+    // =====================================================
+    // TRY AGAIN
+    // =====================================================
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestTryAgainServerRpc()
+    {
+        gameEndedNet.Value = false;
+
+        CurrentTime = 0f;
+        StartTimer();
+
+        LoadScene(prisonScene);
+    }
+
+    // =====================================================
+    // SCENES
     // =====================================================
 
     private void LoadScene(string scene)
@@ -97,13 +213,12 @@ public class GameManager : NetworkBehaviour
 
         if (!IsServer) return;
 
-        Debug.Log("Scene loaded: " + sceneName);
-
-        // ❌ NEVER spawn in GameOverScene
         if (sceneName == gameOverSceneName)
+        {
+            StopTimer();
             return;
+        }
 
-        // ✔ ONLY spawn in gameplay scenes
         if (sceneName == prisonScene || sceneName == diningRoomScene)
         {
             SpawnAllPlayers();
@@ -111,17 +226,11 @@ public class GameManager : NetworkBehaviour
     }
 
     // =====================================================
-    // 👥 SPAWNING (FIXED NULL ISSUE)
+    // SPAWNING
     // =====================================================
 
     private void SpawnAllPlayers()
     {
-        if (playerPrefab == null)
-        {
-            Debug.LogError("PlayerPrefab is NOT assigned in GameManager!");
-            return;
-        }
-
         foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
         {
             SpawnPlayer(client.ClientId);
@@ -134,19 +243,11 @@ public class GameManager : NetworkBehaviour
 
         NetworkObject netObj = player.GetComponent<NetworkObject>();
 
-        if (netObj == null)
-        {
-            Debug.LogError("PlayerPrefab missing NetworkObject!");
-            return;
-        }
-
         netObj.SpawnAsPlayerObject(clientId, true);
-
-        Debug.Log($"Spawned player {clientId}");
     }
 
     // =====================================================
-    // 🔑 KEY
+    // GAME LOGIC
     // =====================================================
 
     public void CollectKey()
@@ -161,29 +262,15 @@ public class GameManager : NetworkBehaviour
             WinGame();
     }
 
-    // =====================================================
-    // 💀 DEATH (SERVER AUTHORITATIVE)
-    // =====================================================
-
     public void PlayerDiedServer(ulong clientId)
     {
         if (!IsServer || gameEndedNet.Value) return;
-
-        Debug.Log($"Player died: {clientId}");
-
-        if (NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
-        {
-            if (client.PlayerObject != null)
-            {
-                client.PlayerObject.Despawn(true);
-            }
-        }
 
         LoseGame();
     }
 
     // =====================================================
-    // 🏆 WIN / LOSE
+    // WIN / LOSE (SYNCED)
     // =====================================================
 
     private void WinGame()
@@ -191,6 +278,14 @@ public class GameManager : NetworkBehaviour
         if (gameEndedNet.Value) return;
 
         gameEndedNet.Value = true;
+
+        // 🔥 CRITICAL FIX: finalize time FIRST
+        StopTimer();
+
+        playerWonNet.Value = true;
+
+        // 🔥 ensure we use the FINAL computed time
+        finalTimeNet.Value = CurrentTime;
 
         DespawnAllPlayers();
         LoadScene(gameOverSceneName);
@@ -202,13 +297,26 @@ public class GameManager : NetworkBehaviour
 
         gameEndedNet.Value = true;
 
+        StopTimer();
+
+        playerWonNet.Value = false;
+
+        // explicitly set AFTER stop timer (safe but irrelevant)
+        finalTimeNet.Value = 0f;
+
         DespawnAllPlayers();
         LoadScene(gameOverSceneName);
     }
 
-    // =====================================================
-    // CLEANUP
-    // =====================================================
+    public void ResetGame()
+    {
+        if (!IsServer) return;
+
+        gameEndedNet.Value = false;
+        CurrentTime = 0f;
+
+        StartTimer();
+    }
 
     private void DespawnAllPlayers()
     {
@@ -217,5 +325,48 @@ public class GameManager : NetworkBehaviour
             if (client.PlayerObject != null)
                 client.PlayerObject.Despawn(true);
         }
+    }
+
+    public void ClearLocalState()
+    {
+        CurrentTime = 0f;
+        gameEndedNet.Value = false;
+        playerWonNet.Value = false;
+        finalTimeNet.Value = 0f;
+    }
+
+    public EnemyFactory GetEnemyFactory() => enemyFactory;
+
+    public void SaveGameState()
+    {
+        PlayerPrefs.SetString("LastScene", SceneManager.GetActiveScene().name);
+        PlayerPrefs.SetFloat("LastTime", CurrentTime);
+        PlayerPrefs.SetInt("GameEnded", gameEndedNet.Value ? 1 : 0);
+        PlayerPrefs.Save();
+    }
+
+    public void LoadGameState()
+    {
+        if (!PlayerPrefs.HasKey("LastScene")) return;
+
+        string scene = PlayerPrefs.GetString("LastScene");
+
+        CurrentTime = PlayerPrefs.GetFloat("LastTime");
+
+        gameEndedNet.Value = PlayerPrefs.GetInt("GameEnded") == 1;
+
+        SceneManager.LoadScene(scene);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void SetPauseStateServerRpc(bool pause)
+    {
+        isPausedNet.Value = pause;
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void ReturnToMenuServerRpc()
+    {
+        RequestReturnToMenuAndShutdownServerRpc();
     }
 }

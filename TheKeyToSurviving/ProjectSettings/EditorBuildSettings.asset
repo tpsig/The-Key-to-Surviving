@@ -6,15 +6,24 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/BootstrapScene.unity
+    guid: 83d7a1f74ac2e4f5090282e9a7abfad5
+  - enabled: 1
+    path: Assets/Scenes/MainMenuScene.unity
+    guid: 764fa168111014ceaac162ed8ef2c5f0
+  - enabled: 1
     path: Assets/Scenes/DiningRoomScene.unity
     guid: b4e1c44a20d58447993b5f5218eae198
   - enabled: 1
     path: Assets/Scenes/PrisonScene.unity
     guid: 5aaa83ad463e140e19eda4e810be2032
   - enabled: 1
-    path: Assets/Scenes/MainMenuScene.unity
-    guid: 764fa168111014ceaac162ed8ef2c5f0
-  - enabled: 1
     path: Assets/Scenes/GameOverScene.unity
     guid: 7440181ac6fb04cb58ec58992c9e3254
+  - enabled: 1
+    path: Assets/Scenes/PauseMenu.unity
+    guid: 26d1c87142ac245a4bce326651905dc5
+  - enabled: 1
+    path: Assets/Scenes/HighScoreScene.unity
+    guid: 3f8a191b3fc654ec9a477257d9a9e5ce
   m_configObjects: {}

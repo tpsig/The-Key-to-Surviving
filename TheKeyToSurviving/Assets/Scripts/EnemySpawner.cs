@@ -4,8 +4,6 @@ using System.Collections;
 
 public class EnemySpawner : NetworkBehaviour
 {
-    public GameObject enemyPrefab;
-
     private bool hasSpawned;
 
     public override void OnNetworkSpawn()
@@ -17,7 +15,6 @@ public class EnemySpawner : NetworkBehaviour
 
     private IEnumerator SpawnWhenReady()
     {
-        // WAIT FOR SCENE TO FULLY STABILIZE
         yield return new WaitForSeconds(1f);
 
         if (hasSpawned) yield break;
@@ -43,30 +40,10 @@ public class EnemySpawner : NetworkBehaviour
             return;
         }
 
-        if (enemyPrefab == null)
-        {
-            Debug.LogError("Enemy Prefab is NOT assigned!");
-            return;
-        }
-
-        GameObject enemy = Instantiate(enemyPrefab, spawnPoint.transform.position, Quaternion.identity);
-
-        NetworkObject netObj = enemy.GetComponent<NetworkObject>();
-
-        if (netObj == null)
-        {
-            Debug.LogError("Enemy prefab missing NetworkObject!");
-            return;
-        }
-
-        Enemy enemyScript = enemy.GetComponent<Enemy>();
-        if (enemyScript != null)
-        {
-            enemyScript.movementType = type;
-        }
-
-        netObj.Spawn(true);
-
-        Debug.Log("Spawned enemy at " + tag);
+        // 🔥 Factory handles creation
+        EnemyFactory.Instance.CreateEnemy(
+            spawnPoint.transform.position,
+            type
+        );
     }
 }
